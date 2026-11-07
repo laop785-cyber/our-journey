@@ -1,0 +1,27 @@
+name: VIAMORI
+options:
+  deploymentTarget:
+    iOS: "17.0"
+  bundleIdPrefix: app.viamori
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: 5.0
+    TARGETED_DEVICE_FAMILY: "1,2"
+    GENERATE_INFOPLIST_FILE: YES
+    INFOPLIST_KEY_CFBundleDisplayName: VIAMORI
+    INFOPLIST_KEY_UILaunchScreen_Generation: YES
+
+ targets:
+  VIAMORI:
+    type: application
+    platform: iOS
+    sources:
+      - App
+      - Models
+      - Views
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.viamori.travel
+        INFOPLIST_KEY_UIUserInterfaceStyle: Automatic

@@ -1,5 +1,8 @@
 import SwiftUI
 import MapKit
+import PhotosUI
+import UIKit
+import CoreLocation
 
 struct ContentView: View {
     @EnvironmentObject private var store: TripStore
@@ -9,20 +12,15 @@ struct ContentView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack {
-                memoriesScreen
-            }
-            .tabItem { Label("추억", systemImage: "book.closed.fill") }
-            .tag(0)
-
+            NavigationStack { memoriesScreen }
+                .tabItem { Label("추억", systemImage: "book.closed.fill") }
+                .tag(0)
             NavigationStack { TravelMapView() }
                 .tabItem { Label("지도", systemImage: "map.fill") }
                 .tag(1)
-
             NavigationStack { restaurantsScreen }
                 .tabItem { Label("맛집", systemImage: "fork.knife") }
                 .tag(2)
-
             NavigationStack { SettingsView() }
                 .tabItem { Label("설정", systemImage: "gearshape.fill") }
                 .tag(3)
@@ -55,16 +53,18 @@ struct ContentView: View {
                 .buttonStyle(.plain)
 
                 HStack {
-                    Text("여행 추억")
-                        .font(.title2.bold())
+                    Text("여행 추억").font(.title2.bold())
                     Spacer()
-                    Text("\(store.memories.count)개")
-                        .foregroundStyle(.secondary)
+                    Text("\(store.memories.count)개").foregroundStyle(.secondary)
                 }
 
                 if store.memories.isEmpty {
-                    ContentUnavailableView("아직 기록이 없어요", systemImage: "airplane", description: Text("여행지 추가를 눌러 첫 추억을 남겨 보세요."))
-                        .padding(.top, 20)
+                    ContentUnavailableView(
+                        "아직 기록이 없어요",
+                        systemImage: "airplane",
+                        description: Text("여행지 추가를 눌러 첫 추억을 남겨 보세요.")
+                    )
+                    .padding(.top, 20)
                 } else {
                     LazyVStack(spacing: 12) {
                         ForEach(store.memories) { memory in
@@ -87,14 +87,18 @@ struct ContentView: View {
             .padding(.bottom, 24)
         }
         .background(Color.viamoriCream.ignoresSafeArea())
-        .navigationBarHidden(true)
+        .toolbar(.hidden, for: .navigationBar)
     }
 
     private var restaurantsScreen: some View {
         List {
             if store.restaurants.isEmpty {
-                ContentUnavailableView("저장한 맛집이 없어요", systemImage: "fork.knife", description: Text("여행 중 기억하고 싶은 맛집을 저장해 보세요."))
-                    .listRowBackground(Color.clear)
+                ContentUnavailableView(
+                    "저장한 맛집이 없어요",
+                    systemImage: "fork.knife",
+                    description: Text("여행 중 기억하고 싶은 맛집을 저장해 보세요.")
+                )
+                .listRowBackground(Color.clear)
             } else {
                 ForEach(store.restaurants) { restaurant in
                     VStack(alignment: .leading, spacing: 7) {
@@ -130,7 +134,13 @@ struct ContentView: View {
 }
 
 private struct MemoryCard: View {
+    @AppStorage("viamori.showCountry") private var showCountry = true
     let memory: TripMemory
+
+    private var placeText: String {
+        let parts = showCountry ? [memory.city, memory.country] : [memory.city]
+        return parts.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
 
     var body: some View {
         HStack(spacing: 14) {
@@ -149,8 +159,7 @@ private struct MemoryCard: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(memory.title).font(.headline).foregroundStyle(.primary).lineLimit(1)
-                Text([memory.city, memory.country].filter { !$0.isEmpty }.joined(separator: ", "))
-                    .font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                Text(placeText).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                 Label(memory.date.formatted(date: .abbreviated, time: .omitted), systemImage: "calendar")
                     .font(.caption).foregroundStyle(.secondary)
                 if !memory.note.isEmpty {
@@ -162,6 +171,7 @@ private struct MemoryCard: View {
         }
         .padding(12)
         .background(.white, in: RoundedRectangle(cornerRadius: 18))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -210,7 +220,10 @@ struct MemoryDetailView: View {
 struct TravelMapView: View {
     @EnvironmentObject private var store: TripStore
     @State private var cameraPosition: MapCameraPosition = .region(
-        MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 20, longitude: 0), span: MKCoordinateSpan(latitudeDelta: 100, longitudeDelta: 100))
+        MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 20, longitude: 0),
+            span: MKCoordinateSpan(latitudeDelta: 100, longitudeDelta: 100)
+        )
     )
 
     private var mappedMemories: [TripMemory] {
@@ -221,7 +234,10 @@ struct TravelMapView: View {
         Map(position: $cameraPosition) {
             ForEach(mappedMemories) { memory in
                 if let latitude = memory.latitude, let longitude = memory.longitude {
-                    Marker(memory.city.isEmpty ? memory.title : memory.city, coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
+                    Marker(
+                        memory.city.isEmpty ? memory.title : memory.city,
+                        coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+                    )
                 }
             }
         }
@@ -229,7 +245,7 @@ struct TravelMapView: View {
         .navigationTitle("여행 지도")
         .overlay(alignment: .bottom) {
             if mappedMemories.isEmpty {
-                Label("여행지 추가 시 위도·경도를 입력하면 지도에 표시돼요", systemImage: "mappin.and.ellipse")
+                Label("장소를 저장하면 지도에 표시돼요", systemImage: "mappin.and.ellipse")
                     .font(.footnote).padding(12).background(.regularMaterial, in: Capsule()).padding()
             }
         }
@@ -249,14 +265,18 @@ struct AddMemoryView: View {
     @State private var longitude = ""
     @State private var photoItem: PhotosPickerItem?
     @State private var photoData: Data?
+    @State private var isSaving = false
+    @State private var locationError: String?
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("여행지") {
-                    TextField("기록 제목", text: $title)
+                    TextField("기록 제목 (선택)", text: $title)
                     TextField("도시 또는 장소", text: $city)
+                        .textContentType(.addressCity)
                     TextField("나라", text: $country)
+                        .textContentType(.countryName)
                 }
                 Section("언제") {
                     DatePicker("날짜", selection: $date, displayedComponents: .date)
@@ -269,13 +289,18 @@ struct AddMemoryView: View {
                         Label(photoData == nil ? "사진 선택" : "사진 변경", systemImage: "photo")
                     }
                     if let photoData, let image = UIImage(data: photoData) {
-                        Image(uiImage: image).resizable().scaledToFill().frame(height: 180).clipped().clipShape(RoundedRectangle(cornerRadius: 12))
+                        Image(uiImage: image).resizable().scaledToFill().frame(height: 180).clipped()
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
                 }
                 Section {
                     TextField("위도 (예: 48.8584)", text: $latitude).keyboardType(.decimalPad)
                     TextField("경도 (예: 2.2945)", text: $longitude).keyboardType(.decimalPad)
-                    Text("위도와 경도를 입력하면 지도에 핀이 표시됩니다.").font(.caption).foregroundStyle(.secondary)
+                    Text("비워 두면 장소 이름으로 위치를 찾아 지도에 표시합니다.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if let locationError {
+                        Text(locationError).font(.caption).foregroundStyle(.orange)
+                    }
                 } header: { Text("지도 위치 · 선택") }
             }
             .navigationTitle("여행지 추가")
@@ -283,7 +308,12 @@ struct AddMemoryView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("취소") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("저장") { saveMemory() }.disabled(city.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Button {
+                        Task { await saveMemory() }
+                    } label: {
+                        if isSaving { ProgressView() } else { Text("저장") }
+                    }
+                    .disabled(city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
                 }
             }
             .task(id: photoItem) {
@@ -293,18 +323,40 @@ struct AddMemoryView: View {
         }
     }
 
-    private func saveMemory() {
+    @MainActor
+    private func saveMemory() async {
+        isSaving = true
+        defer { isSaving = false }
+
         let cleanCity = city.trimmingCharacters(in: .whitespacesAndNewlines)
+        var resolvedLatitude = Double(latitude.replacingOccurrences(of: ",", with: "."))
+        var resolvedLongitude = Double(longitude.replacingOccurrences(of: ",", with: "."))
+
+        if resolvedLatitude == nil || resolvedLongitude == nil {
+            let query = [cleanCity, country].filter { !$0.isEmpty }.joined(separator: ", ")
+            do {
+                if let placemark = try await CLGeocoder().geocodeAddressString(query).first,
+                   let coordinate = placemark.location?.coordinate {
+                    resolvedLatitude = coordinate.latitude
+                    resolvedLongitude = coordinate.longitude
+                } else {
+                    locationError = "위치를 찾지 못했어요. 장소를 확인하거나 좌표를 직접 입력해 주세요."
+                }
+            } catch {
+                locationError = "위치 검색에 실패했어요. 장소를 확인하거나 좌표를 직접 입력해 주세요."
+            }
+        }
+
         store.add(TripMemory(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? cleanCity : title,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? cleanCity : title.trimmingCharacters(in: .whitespacesAndNewlines),
             city: cleanCity,
             country: country.trimmingCharacters(in: .whitespacesAndNewlines),
             date: date,
             time: time,
-            note: note,
+            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
             photoData: photoData,
-            latitude: Double(latitude.replacingOccurrences(of: ",", with: ".")),
-            longitude: Double(longitude.replacingOccurrences(of: ",", with: "."))
+            latitude: resolvedLatitude,
+            longitude: resolvedLongitude
         ))
         dismiss()
     }
@@ -329,7 +381,9 @@ struct AddRestaurantView: View {
                     TextField("나라", text: $country)
                     DatePicker("방문 날짜", selection: $visitedAt, displayedComponents: .date)
                     Picker("별점", selection: $rating) {
-                        ForEach(1...5, id: \.self) { value in Text(String(repeating: "★", count: value)).tag(value) }
+                        ForEach(1...5, id: \.self) { value in
+                            Text(String(repeating: "★", count: value)).tag(value)
+                        }
                     }
                 }
                 Section("메모") {
@@ -342,7 +396,14 @@ struct AddRestaurantView: View {
                 ToolbarItem(placement: .cancellationAction) { Button("취소") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("저장") {
-                        store.add(RestaurantMemory(name: name.trimmingCharacters(in: .whitespacesAndNewlines), city: city, country: country, visitedAt: visitedAt, note: note, rating: rating))
+                        store.add(RestaurantMemory(
+                            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+                            city: city.trimmingCharacters(in: .whitespacesAndNewlines),
+                            country: country.trimmingCharacters(in: .whitespacesAndNewlines),
+                            visitedAt: visitedAt,
+                            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+                            rating: rating
+                        ))
                         dismiss()
                     }
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -361,6 +422,10 @@ struct SettingsView: View {
             Section("표시") {
                 Toggle("여행 기록에 나라 표시", isOn: $showCountry)
                 Toggle("여행 기록 알림", isOn: $notificationsEnabled)
+                    .disabled(true)
+                    .accessibilityHint("알림 기능은 다음 버전에 추가할 예정입니다.")
+                Text("알림 설정은 아직 동작하지 않습니다.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Section("앱 정보") {
                 LabeledContent("앱 이름", value: "VIAMORI")
