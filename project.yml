@@ -13,7 +13,7 @@ settings:
     INFOPLIST_KEY_CFBundleDisplayName: VIAMORI
     INFOPLIST_KEY_UILaunchScreen_Generation: YES
 
- targets:
+targets:
   VIAMORI:
     type: application
     platform: iOS
